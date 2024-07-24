@@ -356,15 +356,6 @@ impl Solver {
             row_coeffs: ScatteredVec::empty(num_total_vars - num_constraints),
         };
 
-        debug!(
-            "initialized solver: vars: {}, constraints: {}, primal feasible: {}, dual feasible: {}, nnz: {}",
-            res.num_vars,
-            res.orig_constraints.rows(),
-            res.is_primal_feasible,
-            res.is_dual_feasible,
-            res.orig_constraints.nnz(),
-        );
-
         Ok(res)
     }
 
@@ -485,23 +476,10 @@ impl Solver {
     }
 
     fn optimize(&mut self) -> Result<(), Error> {
-        for iter in 0.. {
-            if iter % 1000 == 0 {
-                let (num_vars, infeasibility) = self.calc_dual_infeasibility();
-                debug!(
-                    "optimize iter {}: obj.: {}, non-optimal coeffs: {} ({})",
-                    iter, self.cur_obj_val, num_vars, infeasibility,
-                );
-            }
-
-            if let Some(pivot_info) = self.choose_pivot()? {
+        loop {
+           if let Some(pivot_info) = self.choose_pivot()? {
                 self.pivot(&pivot_info);
             } else {
-                debug!(
-                    "found optimum in {} iterations, obj.: {}",
-                    iter + 1,
-                    self.cur_obj_val,
-                );
                 break;
             }
         }
@@ -511,33 +489,13 @@ impl Solver {
     }
 
     fn restore_feasibility(&mut self) -> Result<(), Error> {
-        let obj_str = if self.is_dual_feasible {
-            "obj."
-        } else {
-            "artificial obj."
-        };
-
-        for iter in 0.. {
-            if iter % 1000 == 0 {
-                let (num_vars, infeasibility) = self.calc_primal_infeasibility();
-                debug!(
-                    "restore feasibility iter {}: {}: {}, infeas. vars: {} ({})",
-                    iter, obj_str, self.cur_obj_val, num_vars, infeasibility,
-                );
-            }
-
+        loop {
             if let Some((row, leaving_new_val)) = self.choose_pivot_row_dual() {
                 self.calc_row_coeffs(row);
                 let pivot_info = self.choose_entering_col_dual(row, leaving_new_val)?;
                 self.calc_col_coeffs(pivot_info.col);
                 self.pivot(&pivot_info);
             } else {
-                debug!(
-                    "restored feasibility in {} iterations, {}: {}",
-                    iter + 1,
-                    obj_str,
-                    self.cur_obj_val,
-                );
                 break;
             }
         }
@@ -631,40 +589,6 @@ impl Solver {
 
         self.is_primal_feasible = false;
         self.restore_feasibility()
-    }
-
-    /// Number of infeasible basic vars and sum of their infeasibilities.
-    fn calc_primal_infeasibility(&self) -> (usize, f64) {
-        let mut num_vars = 0;
-        let mut infeasibility = 0.0;
-        for ((&val, &min), &max) in self
-            .basic_var_vals
-            .iter()
-            .zip(&self.basic_var_mins)
-            .zip(&self.basic_var_maxs)
-        {
-            if val < min - EPS {
-                num_vars += 1;
-                infeasibility += min - val;
-            } else if val > max + EPS {
-                num_vars += 1;
-                infeasibility += val - max;
-            }
-        }
-        (num_vars, infeasibility)
-    }
-
-    /// Number of infeasible obj. coeffs and sum of their infeasibilities.
-    fn calc_dual_infeasibility(&self) -> (usize, f64) {
-        let mut num_vars = 0;
-        let mut infeasibility = 0.0;
-        for (&obj_coeff, var_state) in self.nb_var_obj_coeffs.iter().zip(&self.nb_var_states) {
-            if !(var_state.at_min && obj_coeff > -EPS) && !(var_state.at_max && obj_coeff < EPS) {
-                num_vars += 1;
-                infeasibility += obj_coeff.abs();
-            }
-        }
-        (num_vars, infeasibility)
     }
 
     /// Calculate current coeffs column for a single non-basic variable.

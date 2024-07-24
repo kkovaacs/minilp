@@ -129,14 +129,6 @@ pub fn lu_factorize<'a>(
     //
     // https://ecommons.cornell.edu/bitstream/handle/1813/6623/86-783.pdf
 
-    let mat_nnz = (0..size).map(|c| get_col(c).0.len()).sum::<usize>();
-    trace!(
-        "lu_factorize: starting, matrix size: {}, nnz: {} (excess: {})",
-        size,
-        mat_nnz,
-        mat_nnz - size,
-    );
-
     let col_perm = super::ordering::order_simple(size, |c| get_col(c).0);
 
     let mut orig_row2elt_count = vec![0; size];
@@ -272,17 +264,6 @@ pub fn lu_factorize<'a>(
             *r = orig2new_row[*r];
         }
     }
-
-    let lower_nnz = lower.nnz();
-    let upper_nnz = upper.nnz();
-    trace!(
-        "lu_factorize: done, lower nnz: {} (excess: {}), upper nnz: {} (excess: {}), additional fill-in: {}",
-        lower_nnz + size,
-        lower_nnz,
-        upper_nnz + size,
-        upper_nnz,
-        lower_nnz + upper_nnz + size - mat_nnz,
-    );
 
     let res = LUFactors {
         lower: TriangleMat {

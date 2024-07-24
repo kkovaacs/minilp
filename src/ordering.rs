@@ -157,7 +157,6 @@ pub fn order_colamd<'a>(
     }
 
     let ns_size = size - num_singletons; // number of non-singleton columns.
-    let mut num_dense_rows = 0;
 
     {
         // Dense rows make COLAMD bounds on fill-in useless so we exclude them from consideration
@@ -166,14 +165,11 @@ pub fn order_colamd<'a>(
         for (r, row) in rows.iter_mut().enumerate() {
             if row.end - row.begin >= dense_row_thresh {
                 is_absorbed_row[r] = true;
-                num_dense_rows += 1;
             }
         }
     }
 
     let mut cols_queue = ColsQueue::new(cols.len());
-    let mut num_dense_cols = 0;
-    let mut num_cols_only_dense_rows = 0;
 
     {
         // Compact columns and detect dense ones.
@@ -197,12 +193,10 @@ pub fn order_colamd<'a>(
 
             let col_len = cur_end - col.begin;
             if col_len >= dense_col_thresh {
-                num_dense_cols += 1;
                 cols_queue.add(c, col_len); // order dense columns by their size.
             } else if col_len == 0 {
                 // This means the column consists only of dense rows.
                 // Order these at the very end.
-                num_cols_only_dense_rows += 1;
                 cols_queue.add(c, size - 1);
             }
         }
@@ -249,8 +243,6 @@ pub fn order_colamd<'a>(
     let mut row_set_diffs = vec![0; size];
     let mut rows_with_diffs = vec![];
     let mut is_in_diffs = vec![false; size];
-
-    let mut num_mass_eliminated = 0;
 
     while cols_queue.len() > 0 {
         let pivot_c = cols_queue.pop_min().unwrap();
@@ -328,7 +320,6 @@ pub fn order_colamd<'a>(
                 if diff == 0 {
                     // mass elimination: we can order column c now as it will not result
                     // in any additional fill-in.
-                    num_mass_eliminated += 1;
                     new2orig[cur_ordered_col] = c;
                     cur_ordered_col += 1;
                     is_ordered_col[c] = true;
@@ -370,10 +361,6 @@ pub fn order_colamd<'a>(
     for (new, &orig) in new2orig.iter().enumerate() {
         orig2new[orig] = new;
     }
-
-    trace!(
-        "COLAMD: ordered {} cols, singletons: {} (cheap: {}), dense_rows: {}, dense_cols: {}, cols_only_dense_rows: {}, mass_eliminated: {}",
-        size, num_singletons, num_cheap_singletons, num_dense_rows, num_dense_cols, num_cols_only_dense_rows, num_mass_eliminated);
 
     Ok(Perm { orig2new, new2orig })
 }
@@ -487,7 +474,7 @@ pub fn find_diag_matching<'a>(
         });
 
         'dfs_loop: while !dfs_stack.is_empty() {
-            let mut cur_step = dfs_stack.last_mut().unwrap();
+            let cur_step = dfs_stack.last_mut().unwrap();
             let c = cur_step.col;
             let col_rows = get_col(c);
 
@@ -542,6 +529,7 @@ pub fn find_diag_matching<'a>(
 
 /// Lower block triangular form of a matrix.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct BlockDiagForm {
     /// Row permutation: for each original row its new row number so that diag is nonzero.
     pub row2col: Vec<usize>,

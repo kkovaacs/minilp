@@ -46,9 +46,6 @@ assert_eq!(solution[y], 3.0);
 
 #![deny(missing_debug_implementations, missing_docs)]
 
-#[macro_use]
-extern crate log;
-
 mod helpers;
 mod lu;
 mod mps;
